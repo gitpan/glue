@@ -1,0 +1,5 @@
+#!perl -w
+use Mac::Glue;
+my $n = new Mac::Glue 'Netscape_Communicator';
+$n->make({new => 'cwin'});
+$n->GetURL('http://pudge.net/macperl/', {_switch=>1});

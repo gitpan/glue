@@ -1,0 +1,12 @@
+#!perl -wl
+use Mac::Glue;
+$f = new Mac::Glue 'Finder';
+
+$drive = MacPerl::MakePath((MacPerl::Volumes())[0]);
+$window = $f->o(window=>1);
+
+$f->REPLY(1);
+$f->open    ($f->o(item => $drive));
+$f->clean_up($window);
+$f->close   ($window);
+__END__

@@ -1,0 +1,9 @@
+#!perl -wl
+use Mac::Glue;
+$s = new Mac::Glue 'Sherlock';
+
+$t = MacPerl::Ask 'Search drive for what text?';
+
+$s->activate;
+print join "\n", $s->search({'for' => $t})->get;
+$s->quit;

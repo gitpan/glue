@@ -1,0 +1,90 @@
+THIS IS ALPHA CODE AND IS SUBJECT TO CHANGE OR CRASH YOUR COMPUTER IN THE 
+MEANTIME.  I'm not just saying that, I mean it.
+
+I don't have much to say about this right now.  Read the notes
+if you feel like it (please do!).  They are at:
+
+    http://pudge.net/macperl/gluenotes.pod
+
+The most current notes are included here, but updates will always
+be at the URL above.
+
+
+WHAT THIS IS
+------------
+
+It is an architecture for using Apple event terminology in MacPerl.
+It is cool.
+It is very unfinished.
+
+
+GETTING STARTED
+---------------
+
+Put the modules where they belong, fetching other needed modules and
+installing them, too (Storable, MLDBM, Data::Dumper,
+Mac::AppleEvents::Simple 0.60, Mac::Apps::Launch 1.61).
+
+The best way to do this is with the installme program from cpan-mac.
+
+    http://www.perl.com/authors/id/CNANDOR/
+
+This will put everything in the right place, and autosplit where
+necessary, and make life simple.
+
+It is not necessary to delete or move the Glue and AETE modules and glues you 
+may have now, except where they are being replaced by the ones here.
+But you might want to clean them out anyway.
+
+Drop applications on the glue droplet.  Run the scriptadds droplet
+to make glues of all your additions (or drop the additions
+folder or individual additions on the droplet).  Do the same
+thing with the dialect droplet.  Then start playing!
+
+At the least, run the scriptadds and dialect droplets, then drop
+the Finder on the glue droplet.
+
+Also, you should have your directory that contains these modules
+come before the main MacPerl directory in your paths, or else my
+Mac::Types module won't be found.  Also, you don't want the AutoLoader
+or Exporter that came with MacPerl to be found, you want the ones
+that came with cpan-mac.
+
+
+PLAYING
+-------
+
+Note the label and beep script ... the only changes from the previous
+script were these:
+
+  use Mac::Glue::Finder;
+  $g = new Mac::Glue::Finder;
+
+became:
+
+  use Mac::Glue;
+  $g = new Mac::Glue 'Finder';
+
+Yay.
+
+Seems to be pretty stable so far.  Please play and read the notes
+and feed back to macperl-modules (see http://www.macperl.org/
+for more details).  Feel free to send any feedback, including
+patched, to the list.
+
+Note to take the POD in Mac::Glue and the glues themselves with a grain
+of salt right now.  I've not updated them.
+
+See the scripts in the ex folder for more fun.
+
+
+OTHER
+-----
+
+This is not an official release of the Mac::AETE stuff; I've made
+a bunch of changes from David Schooley's code, and he'll be making
+updates to it.
+
+-- 
+Chris Nandor          mailto:pudge@pobox.com         http://pudge.net/
+%PGPKey = ('B76E72AD', [1024, '0824090B CE73CA10  1FF77F13 8180B6B6'])

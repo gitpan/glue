@@ -1,0 +1,401 @@
+=head1 NAME
+
+Mac::Glue Notes
+
+
+=head1 SYNOPSIS
+
+Just some notes about what to do for Mac::Glue, a MacPerl framework
+for accessing Apple events and Apple event terminology.
+
+
+=head1 DESCRIPTION
+
+There have been several alphas of Mac::Glue released,
+and it is now being reimplemented and muchly rewritten,
+which includes some major interface changes.
+
+This document constitutes a basic outline of the new implementation,
+and feedback is requested.  There is a lot that is not mentioned here.
+Bring it up, and maybe it will be added.  :)
+
+Discussion of this should take place on the macperl-modules@macperl.org
+mailing list, or direct mail to pudge@pobox.com.  For more info:
+
+    http://www.macperl.org/                 (mailing list info)
+    http://pudge.net/macperl/gluenotes.pod  (this document)
+    http://pudge.net/macperl/Mac-Glue.html  (currently out of date,
+                                             will be updated when
+                                             more is finalized here)
+
+
+=head2 Syntax
+
+The most important thing here is the user syntax.  The rest can already
+be accomplished with a more difficult user interface to the Apple events.
+
+This is the area I want the most input on.  How would you want the
+interface to the glue to look?  When examples are given, they are just
+examples.  As of now, consider everything about the interface
+subject to change, though I obviously have a preference for the
+basic structure:
+
+    $glue = Mac::Glue->new($app);
+    $glue->event(DIRECTOBJECT, {PARAMETER => DATA});
+
+But even this is open to discussion.
+
+
+=over 4
+
+=item Constructors
+
+Previously, I thought a separate module for each application might be
+reasonable.  I think now one module should be used, with constructors
+calling each app.
+
+    use Mac::Glue;
+    my $glue = Mac::Glue->new('Finder');
+
+    # other possibilities
+    my $glue = Mac::Glue->new('Eudora Pro',
+        {path => 'HD:Comm:Mail:Eudora Pro'});
+    my $glue = Mac::Glue->new('Finder', {id => 'MACS'});
+
+    # other types of addresses (session ID, target ID, PSN)
+    my $glue = Mac::Glue->new('Finder', {ADDRESSTYPE => ADDRESSDATA});
+
+Part of the idea here would be that the first parameter, the app name,
+would be used to find the glue data for that app.  Then we could
+find the target app with maybe some other method.  For instance,
+if "path" is passed, we can see if the app with that path is running,
+and if so, use its PSN as the target.  If not, we can launch it.
+
+
+=item Attributes
+
+Users might in some cases want to mess with the standard attributes used
+in an Apple Event, or add more attributes.  Should these be done per
+event, per object instance ... ?  If the former, then there needs to be
+a way to get a built event independently of sending it, or to send
+attribute info along in the event/method call, perhaps as:
+
+    $glue->event($directobject,
+        {param => $pdata, _attr => {attr => $attrdata}});
+
+That isn't the nicest way to do it, but most users will seldom need
+to do this.
+
+But again, perhaps setting instance-wide attribute data would be
+preferable:
+
+    $glue->glue_attributes(keyTransactionIDAttr => $id,
+        keyOptionalKeywordAttr => [$key1, $key2]);
+
+But it seems these would make more sense in the method call itself,
+since these would often be specific to an individual event.
+
+
+=item Object Specifier Records
+
+This is the hard part.  First, I am thinking the basic structure
+should be:
+
+    $obj = $glue->obj( item => 'foo' );
+
+    # use label index, label_index, or both?
+    $prop = $glue->obj( property => 'label index', $obj);
+
+    # same as above
+    $prop = $glue->prop( 'label index', $obj);
+
+What about more difficult objects?  What about this canonical
+AppleScript statement?
+
+    the first row in which the First Name column equals Â
+        "John" and the Last Name column equals "Chapman" Â
+        in the table "MyAddresses" of the database "SurfDB"
+
+Anyone want to take a go at it?  I don't.  :)
+
+Also, there's the issue of specifying the form of data you add
+to an object.  There are four components to an object:
+type, form, container, data.  In the following, we know
+three pieces:
+
+    $glue->obj(property => 'label index', item => 'foo');
+
+'property' and 'item' are types, "label index" and "foo"
+are data.  For the label index object, the container is
+the C<item =E<gt> 'foo'> object, and for that object, the
+container is a null container.
+
+What about the data forms and types?  I previously had
+assumed that if it was a number passed, the glue would
+assume formAbsolutePosition and typeLongInteger, otherwise
+formName and typeChar.  Well, the other case is that if
+specified with as a property, the data form is formPropertyID
+and the type is typeType.
+
+Obviously, this is not going to be sufficient going forward.
+There are thee other form types (formUniqueID,
+formRelativePosition, formTest, formRange) and several
+different types for some of the forms.
+
+My initial implementation allowed specification of type
+(though not form) through the obj_form constructor.
+
+    $data = obj_form(long => 123);
+
+Perhaps an extension of that is warranted:
+
+    # assume typeLongInteger ?
+    $data = obj_form( typeAbsolutePosition => 123 );
+
+    # specify other type
+    $data = obj_form(typeAbsolutePosition =>
+        typeAbsoluteOrdinal => kAEFirst);
+
+
+How should these thingys be specified, with AE constants
+as shown, or some other way?  Constants are easier to
+deal with here for now, but are they the best interface
+for the MacPerl programmer at large?
+
+
+=item Send Flags
+
+How about setting SENDMODE, SENDPRIORITY, and TIMEOUT for AESend?
+
+I think it is reasonable for timeout to just add it as if it were a
+parameter:
+
+    $glue->event($dobj, {_timeout => $ticks});
+
+For priority, perhaps similar?
+
+    $glue->event($dobj, {_priority => $priority});
+
+Maybe allow users to specify sendmode the same way?
+
+    $glue->event($obj, {_mode =>
+        kAEWaitReply | kAEAlwaysInteract | kAECanSwitchLayer});
+
+Or, perhaps, allow this AND allow shortcuts?
+
+    $glue->event($obj, {_mode => 'switch'});
+    
+Not planning on the latter yet, but implemented the others.  They
+can be set as parameters (_timeout) or as methods which are
+applied as global defaults ($glue->TIMEOUT).
+
+Defaults are as follows:
+
+=over 4
+
+=item Reply mode
+
+No reply, unless AETE calls for it.
+
+=item Rest of mode
+
+C<kAECanInteract | kAECanSwitchLayer>, so the app can go
+to front if user input is needed.
+
+=item Priority
+
+Normal priority.
+
+=item Timeout
+
+For now, 2**18 seconds.  Might lower that signficantly to just use
+the default timeout.
+
+=back
+
+=back
+
+
+=head2 Guts
+
+What about the implementation?  Some thoughts.
+
+
+=head2 Architecture
+
+Subject to change.  For now:
+
+=over 4
+
+=item MacPerl 5.2.0r4 (not tested with anything less)
+
+=item PowerPC Macintosh
+
+=item Tested only under Mac OS 8.6
+
+=back
+
+
+Required modules:
+
+=over 4
+
+=item Storable
+
+=item MLDBM
+
+=item Data::Dumper
+
+=item Mac::AppleEvents::Simple 0.60
+
+=item Mac::Apps::Launch 1.61
+
+=back
+
+See http://pudge.net/mmp/ for Storable, and CPAN for the others.  There
+is a version of Data::Dumper on MMP, too.  See cpan-mac (on my MacPerl
+site, in my CPAN directory) for tools for installing modules, and working
+with CPAN.
+
+There is only one core module now, Mac::Glue.  Everything else is saved
+out to MLDBM + DB_File + Storable files, and the POD for them are in
+separate POD files, and it is all in a directory specified by the
+$ENV{MACGLUEDIR} variable (which has a default value in the module).
+
+Storable does not work on CFM68K now, hence the requirement for PPC
+only.  We'll switch to something else if we can't get Storable to work.
+
+Would Storable and DB_File files created on PPC be usable on 68K?
+I would guess so, but I dunno.  I used a DB_File from a SPARC
+Solaris 2.5.1 box on my PowerBook G3 Mac OS 8.5.1.  If it can be
+done, can we rely on it always working, or is it only going to
+work sometimes?
+
+Glues are created with the droplets provided.  No facilities exist yet
+for editing glues, but that won't be too hard.  We'll just have a droplet
+that will dump to a file, and then read the file back in once it has
+been edited.
+
+
+=over 4
+
+=item Style
+
+Try to use the AEGizmo stuff for creating Apple events, but
+raw AE functions for dealing with individual components, because
+they are just easier for me to wrap my head around.  They also
+seem safer, especially when dealing with objects.
+
+Or should we try to use AEBuildParameters for stuff?  Use
+AEStream interface for object building?
+
+Try to implement other functions (like CreateObjSpecifier) to make
+object building job easier.  Also CreateLogicalDescriptor,
+CreateRangeDescriptor, CreateCompDescriptor.
+
+Use constants supplied in Mac::AppleEvents when available
+(i.e., use typeApplSignature instead of 'sign', use
+keyAEContainer instead of 'from').  Add these constants
+to Mac::AppleEvents if not available.  Fix Mac::AppleEvents
+to make constants inlined (already done in my local version),
+so they can be OR'd together more easily.
+
+Use a global (or per-instance) tied hash for commonly used descriptors?
+
+    # maybe, maybe not
+    $null = $CommonDescriptors{null};
+
+Would this speed things up?
+
+
+=item Types and Coercions
+
+Use aete information to intelligently convert and coerce data
+to requested types (e.g., if aete calls for typeAlias,
+convert filespec in Mac::Glue using NewAliasMinimal ... don't
+require user to do it).
+
+Basically, we should do as much as possible behind the scenes.  When
+guesses are not good enough, provide way to override guessing,
+as with obj_form stuff above.
+
+
+=item AETE
+
+Were there new AETE flags added for Mac OS 8.5?
+
+
+=item Versioning
+
+The Mac::Glue module needs a version, and need specific versions
+of other modules.  Each one has one version.  What about the AETEs
+(the glues?) themselves?  If I create a glue, it could be version
+1.0.  What if the AETE I used was bad, and I change it?  I change
+the version.  But what about the app version this glue is for?
+
+    use Mac::Glue;
+    $glue = Mac::Glue->new('Finder');
+
+    print $glue->version;  # 1.01
+    print $glue->appversion;  # 8.5.1
+
+There is also the distribution of these.  Is CPAN appropriate?
+If so, how to name them?  How to install them (as they are
+not modules)?
+
+    Mac-Glue-Finder-7.5.5-1.00.bin
+    Mac-Glue-Finder-7.6.1-1.02.bin
+    Mac-Glue-Finder-8.0-1.00.bin
+    Mac-Glue-Finder-8.5.1-1.01.bin
+
+This would reflect four different Finder versions, one glue for each.
+
+Another problem with different OS versions is the dialects and
+additions files.  Separate glue for each addition?  I think this
+would be best.
+
+Default target for the addition should be Finder, MacPerl ... or only
+access additions through another glue?  So you need to create a new
+glue object for an app to use an addition?
+
+
+=item Changes to MacPerl Code
+
+MacPerl hangs if it sends an event to itself that asks for a reply.
+
+MacPerl has a bad idle function used for kAEWaitReply.
+
+Add Create* functions.
+
+What about AEGetKey, AEPutKey?  Convert AE records to subdescs
+first instead?
+
+What about AEArrays?  Do we need to worry about them?
+
+What about remote computer targets?  PPC code in Socket module
+doesn't seem to work.  If we can get it to work, great.  PPCBrowser
+works fine with standard addition "choose application", though,
+so this is a workaround.
+
+=back
+
+
+=head1 TODO
+
+I finished up a lot of stuff, have a lot left to do.
+
+I've rewritten half of C<_primary>, all of C<new> and C<AUTOLOAD>.  I'll focus
+on C<_params> and C<_do_obj> (and maybe C<%AE_GET> and C<%AE_PUT>)
+and then get another release out.
+
+
+=head1 AUTHOR
+
+Chris Nandor E<lt>pudge@pobox.comE<gt>, http://pudge.net/
+
+Copyright (c) 1999 Chris Nandor.  All rights reserved.
+
+
+=head1 VERSION
+
+19990521

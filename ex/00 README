@@ -1,0 +1,7 @@
+Remember that you first need to create glues for each app you script.
+
+SimpleText is not scripted with a glue, it is just opened with
+Mac::Apps::Launch and scripted with PreFab Player.  Drop the
+PreFab Player extension on the glue droplet.
+
+URL Access is found in Scripting Additions in Mac OS 8.6.

@@ -1,0 +1,33 @@
+#!perl -w
+use strict;
+use Mac::Glue;
+my $t = new Mac::Glue 'BetterTelnet';
+
+# set wait_for_text value properly in t_send !
+
+t_connect();
+t_send('ls');
+sleep(5);
+$t->send_text("exit\n");
+
+sub t_connect {
+    my($l, $p, $h);
+    $l = MacPerl::Ask('Login?');
+    $p = MacPerl::Ask('Password?');
+    $h = MacPerl::Ask('Host?');
+
+    $t->{REPLY} = 1;
+    $t->activate;
+    $t->connect('<Default>', {host => $h, waiting => 'yes'});
+
+    $t->wait_for_text('gin: ');
+    $t->send_text("$l\n");
+
+    $t->wait_for_text('word: ');
+    $t->send_text("$p\n");
+}
+
+sub t_send {
+    $t->wait_for_text('% ');
+    $t->send_text(shift() . "\n");
+}
