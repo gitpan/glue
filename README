@@ -1,90 +1,110 @@
-THIS IS ALPHA CODE AND IS SUBJECT TO CHANGE OR CRASH YOUR COMPUTER IN THE 
-MEANTIME.  I'm not just saying that, I mean it.
+-----BEGIN PGP SIGNED MESSAGE-----
 
-I don't have much to say about this right now.  Read the notes
-if you feel like it (please do!).  They are at:
+Thursday, June 22, 1999
 
-    http://pudge.net/macperl/gluenotes.pod
+THIS IS ALPHA CODE AND IS SUBJECT TO CHANGE OR CRASH YOUR COMPUTER IN
+THE MEANTIME.  I'm not just saying that, I mean it.
 
-The most current notes are included here, but updates will always
-be at the URL above.
+Please read this README.  Mac::Glue is not self-explanatory.  Some
+assembly is required.
 
 
 WHAT THIS IS
-------------
+- ------------
 
 It is an architecture for using Apple event terminology in MacPerl.
 It is cool.
 It is very unfinished.
 
 
+
 GETTING STARTED
----------------
+- ---------------
 
-Put the modules where they belong, fetching other needed modules and
-installing them, too (Storable, MLDBM, Data::Dumper,
-Mac::AppleEvents::Simple 0.60, Mac::Apps::Launch 1.61).
+###
+If you have glue.19990607 installed, you can get by with manually
+installing Mac:AETE:Format:Glue.pm, Mac:AppleEvents.pm,
+Mac:AppleEvents:Simple.pm, and Mac:Glue.pm.  If you have
+glue.19990616 installed, only Mac:AETE:Format:Glue.pm and
+Mac:Glue.pm are needed.
 
-The best way to do this is with the installme program from cpan-mac.
+Of course, stuff in ex/ has changed, as have the droplets.
+###
+
+###
+NOTE: some of the modules installed by cpan-mac and this distribution
+might be older than versions you have installed (though in most
+cases, that's unlikely).  If you install modules on your own often,
+peruse the blib directory for modules you might not want to overwrite
+ones you have installed.
+###
+
+Install the cpan-mac distribution (0.22 is the latest version) if you
+haven't already.  In your Preferences, set site_perl as a libraries
+path (so it will come before your main MacPerl lib directory).
+
+Put the modules where they belong.  Everything need that doesn't come
+with MacPerl or cpan-mac is here, including updated modules
+Mac::AppleEvents::Simple, Mac::AppleEvents & Mac::Memory
+(including shared libraries), Mac::AETE, and Mac::Glue itself.
+
+For reference, Mac::Memory has a bug fixed in Handle::get, where a
+null descriptor record would return garbled data.  Mac::AppleEvents
+has its constants inlined, and has three functions added: AEPutKey,
+AEPutKeyDesc, and AEGetKey.  See the POD in Mac::AppleEvents::Simple
+and Mac::Glue for their changes.
+
+The best way to install all this is with the installme program from
+the cpan-mac distribution.  However, because we install our own new
+ExtUtils::MM_MacOS and AutoSplit modules, you will need to run
+installme on this distribution TWICE.  Kinda lame, but oh well.
+cpan-mac can be found at:
 
     http://www.perl.com/authors/id/CNANDOR/
 
 This will put everything in the right place, and autosplit where
-necessary, and make life simple.
+necessary, and make life simple.  HOWEVER, you might want to back up
+old modules and files that are being installed here, because the
+existing files in the site_perl directory will be deleted if they
+exist.
 
-It is not necessary to delete or move the Glue and AETE modules and glues you 
-may have now, except where they are being replaced by the ones here.
-But you might want to clean them out anyway.
+This is not an official release of any of the extra modules included
+with this distribution (like Mac::AppleEvents and Mac::AETE).
 
-Drop applications on the glue droplet.  Run the scriptadds droplet
-to make glues of all your additions (or drop the additions
-folder or individual additions on the droplet).  Do the same
-thing with the dialect droplet.  Then start playing!
+After installing, you need to run the gluedialect program and then the
+gluescriptadds program.
 
-At the least, run the scriptadds and dialect droplets, then drop
-the Finder on the glue droplet.
-
-Also, you should have your directory that contains these modules
-come before the main MacPerl directory in your paths, or else my
-Mac::Types module won't be found.  Also, you don't want the AutoLoader
-or Exporter that came with MacPerl to be found, you want the ones
-that came with cpan-mac.
+Then, for each application you want to script, drop it on the gluemac
+droplet.  Applications should not be running, in general, when dropped
+on the droplet (though in some cases it will work anyway, and in some
+cases the droplet will launch the application for you to get the
+needed information).  First program you should drop on the droplet is
+probably the Finder.  For each example script in this distribution you
+want to try, run the applications through the droplet first.
 
 
 PLAYING
--------
+- -------
 
-Note the label and beep script ... the only changes from the previous
-script were these:
+Read the history in Mac:Glue.pm for what's changed, and read the code
+for the examples in ex/.
 
-  use Mac::Glue::Finder;
-  $g = new Mac::Glue::Finder;
+Seems to be pretty stable, even more so than before.  Please play and
+read the notes and feed back to macperl-modules (see
+http://www.macperl.org/ for more details).  Feel free to send any
+feedback, including patches, to the list.
 
-became:
-
-  use Mac::Glue;
-  $g = new Mac::Glue 'Finder';
-
-Yay.
-
-Seems to be pretty stable so far.  Please play and read the notes
-and feed back to macperl-modules (see http://www.macperl.org/
-for more details).  Feel free to send any feedback, including
-patched, to the list.
-
-Note to take the POD in Mac::Glue and the glues themselves with a grain
-of salt right now.  I've not updated them.
-
-See the scripts in the ex folder for more fun.
-
-
-OTHER
------
-
-This is not an official release of the Mac::AETE stuff; I've made
-a bunch of changes from David Schooley's code, and he'll be making
-updates to it.
-
--- 
+- -- 
 Chris Nandor          mailto:pudge@pobox.com         http://pudge.net/
 %PGPKey = ('B76E72AD', [1024, '0824090B CE73CA10  1FF77F13 8180B6B6'])
+
+-----BEGIN PGP SIGNATURE-----
+Version: PGPfreeware 6.0.2i for non-commercial use
+Comment: Bwahahahaha!
+
+iQCVAwUBN2/zTShcZja3bnKtAQEqdAQAihfN/dmMFGPJ0wV3xJFh2bD48EUJaLc6
+EJ+5IvZBUw5ZamloHNvcPAHcnTJqnnJzih5jx/ghfxWgMy4aLMOhiBFeLMlgnnHH
+M92vY0JpvlyCKtq8j6dYwWxtNm3G2OWUoZKhchoIrfuzANFYH2kWfVmRhnEtOee5
+QZs53Bjumbs=
+=QOTc
+-----END PGP SIGNATURE-----

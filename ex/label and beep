@@ -4,20 +4,19 @@ use strict;
 
 my($vol, $f, $volume, $label, $position, $oldpos);
 
-($vol = MacPerl::MakePath(scalar MacPerl::Volumes)) =~ s/:$//;
-
 $f          = new Mac::Glue 'Finder';
-$position   = $f->p('position', item => $vol);
-$label      = $f->p('label_index',  item => $vol);
-$oldpos     = $f->get($position)->get;
+$vol        = $f->prop('startup disk');
+$position   = $f->prop('position', $vol);
+$label      = $f->prop('label_index', $vol);
+$oldpos     = $f->get($position);
 
 $f->activate;
-$f->set($position, {to => [10, 10]});
+$f->set($position, to => [10, 40]);
 
 for (0 .. 2**5) {
-    $f->set($label, {to => $_});
+    $f->set($label, to => $_);
 }
 
-$f->set($position, {to => $oldpos});
+$f->set($position, to => $oldpos);
 
 $f->beep(3);

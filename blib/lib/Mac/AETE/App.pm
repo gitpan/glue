@@ -13,7 +13,7 @@
 #                                                                      #
 ########################################################################
 
-package App;
+package Mac::AETE::App;
 
 =head1 NAME
 
@@ -121,14 +121,14 @@ use File::Basename;
 
 use Carp;
 
-@App::ISA = qw (Parser);
+@Mac::AETE::App::ISA = qw(Mac::AETE::Parser);
 
 sub new {
     my ($type, $target) = @_;
     my $self = {};
     my $aete_handle;
     
-    my ($name, $running) = &get_app_status_and_launch($target);
+    my($name, $running) = &get_app_status_and_launch($target);
 
     $self->{_target} = $name;
 
@@ -140,22 +140,27 @@ sub new {
         if ( !defined($RF) || $RF == 0) {
             croak ("No Resource Fork available for $target");
         }
-        $self->{_resource_fork} = $RF;
-        $aete_handle = Get1Resource('aete', 0);
-        if (!defined($aete_handle) || $aete_handle == 0) {
-            croak("Application is not scriptable (App.pm)");
+#        $self->{_resource_fork} = $RF;
+        my $temp_handle = Get1Resource('aete', 0);
+        if (!defined($temp_handle) || $temp_handle == 0) {
+            croak("Application '$self->{_target}' is not scriptable (App.pm)");
         }
-        $self->{_resource} = $aete_handle;
+        $aete_handle = new Handle $temp_handle->get;
+        CloseResFile($RF);
     }
-    $self = Parser->new($aete_handle, $target);
 
-    return bless $self, $type;
+    my $newself = Mac::AETE::Parser->new($aete_handle, $target);
+
+    @{$newself}{keys %{$self}} = values %{$self};
+
+    return bless $newself, $type;
 }
 
-sub DESTROY {
-    my $self = shift;
-    CloseResFile $self->{_resource_fork} if defined $self->{_resource_fork};
-}
+#sub DESTROY {
+#    my $self = shift;
+#    print $self, "\n";
+#    CloseResFile $self->{_resource_fork} if defined $self->{_resource_fork};
+#}
 
 
 sub get_app_status_and_launch
@@ -175,7 +180,7 @@ sub get_app_status_and_launch
     if (!$running) {
         my $RF = OpenResFile($app_path);
         if (!defined($RF) || $RF == 0) {
-            croak ("No Resource Fork available for $app_path");
+            croak ("No Resource Fork available for '$app_path': $^E");
         }
         my $check_resource =  Get1Resource('scsz', 0);
         if (!defined($check_resource) || $check_resource == 0) {

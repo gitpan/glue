@@ -2,51 +2,50 @@ package Mac::AETE::Format::Glue;
 use Data::Dumper;
 use Fcntl;
 use File::Basename;
+use File::Path;
 use Mac::AETE::Parser;
-use MLDBM qw(DB_File Storable);
+use Mac::Glue;
+use MLDBM ('DB_File', $Mac::Glue::SERIALIZER);
 
 use strict;
 use vars qw(@ISA $VERSION);
 
-@ISA = qw(Parser);
-$VERSION = '0.09';
+@ISA = qw(Mac::AETE::Parser);
+$VERSION = '0.26';
 
 sub fixname {
     (my $ev = shift) =~ s/[^a-zA-Z0-9_]/_/g;
     $ev =~ s/^_+//;
     $ev =~ s/_+$//;
-    return($ev);
+    return $ev;
 }
 
-sub fixdump {
-    my($data, $var, $text) = @_[0..1];
-    return unless scalar keys %$data;
-    $data = Dumper $data;
-    my @data = split(/\n/, $data);
-    while (@data) {
-        my $t = shift @data;
-        if ($t =~ /\[$/) {
-            $text .= $t;
-            while (@data) {
-                my $d = shift @data;
-                $d =~ s/^\s+//;
-                $text .= ' ' . $d;
-                if ($d =~ /],?$/) {
-                    $text .= "\n";
-                    last;
-                }
-            }
-        } else {
-            $text .= $t . "\n";
+sub doc_enums {
+    my $self = shift;
+    my($text, %n, %d);
+    return unless exists $self->{N};
+
+    $text = "=head2 Enumerations\n\n=over 4\n\n";
+    %n = %{$self->{N }};
+    %d = %{$self->{DN}};
+
+    foreach my $n (sort keys %n) {
+        $text .= "=item '$n'\n\n=over 4\n\n";
+        foreach my $e (keys %{$n{$n}}) {
+            $text .= sprintf("=item %s (%s)%s\n\n", $e, $n{$n}{$e}{id},
+                $n{$n}{$e}{desc} ne '' ? ": $n{$n}{$e}{desc}" : '');
         }
+        $text .= "=back\n\n";
     }
-    $text =~ s/^\$VAR1 = {/\%$var = ( \%Mac::Glue::Dialect::English::$var, \%Mac::Glue::Scripting_Additions::$var,/;
-    $text =~ s/};/);/;
-    return($text);
+
+    $text .= "=back\n\n";
+    return $text;
 }
 
 sub doc_events {
     my($self, $text, %e, %d) = $_[0];
+    return unless exists $self->{E};
+
     $text = "=head2 Events\n\n=over 4\n\n";
     %e = %{$self->{E }};
     %d = %{$self->{DE}};
@@ -54,24 +53,45 @@ sub doc_events {
         my($d, $p, %p);
         $d = $e{$e}{params}{'----'}[1] if $e{$e}{params}{'----'}[1] ne 'null';
         %p = map {($_, $e{$e}{params}{$_})} keys %{$e{$e}{params}};
-        delete($p{'----'});
-        $p = join (', ', map {"$_ => $p{$_}[1]"} sort keys %p);
+        my $dobj = delete $p{'----'};
+
+        my @keys = sort keys %p;
+        @keys = sort {
+            $a->[4] <=> $b->[4]
+                    ||
+            $a->[0] cmp $b->[0]
+        } map {[
+            $_, $d{$e}{params}{$_}, @{$e{$e}{params}{$_}}
+        ]} @keys;
+
+        my $req;
+        $p = join ', ', map {
+            $req += !$_->[4];
+            ($req == 1? '[' : '') . "$_->[0] => $p{$_->[0]}[1]"
+        } @keys;
+        $p .= ']' if $req;
+
+        unshift @keys,
+            ['----', $d{$e}{params}{'----'}, @{$e{$e}{params}{'----'}}]
+            if $dobj;
+
         $text .= sprintf("=item \$obj->%s(%s%s%s)\n\n%s\n\n%s",
             $e, ($d ? $d : ''), ($p && $d ? ', ' : ''),
-            ($p ? "{$p}" : ''), $d{$e}{desc},
+            ($p ? $p : ''), "$d{$e}{desc} ($e{$e}{class}/$e{$e}{event})",
             ($e{$e}{reply}[1] ? "Reply type: $e{$e}{reply}[0]\n\n" : ''));
 
         if ($d || $p) {
             $text .= "Parameters:\n\n";
-            $text .= join '',
-                map {   my $x = $_ eq '----' ? 'direct object' : $_;
-                        "    $x: $d{$e}{params}{$_}\n"}
-                ('----', sort keys %p);
+            $text .= join '', map {
+                my $x = $_->[0] eq '----' ? 'direct object' : $_->[0];
+                    "    $x ($_->[2]): $_->[1]\n"
+                } @keys;
             $text .= "\n";
         }
+        $text .= "\n";
     }
     $text .= "=back\n\n";
-    return($text);
+    return $text;
 }
 
 sub doc_classes {
@@ -80,59 +100,93 @@ sub doc_classes {
     return unless $self->{C}; 
     %c = %{$self->{C }};
     %d = $self->{DC} ? %{$self->{DC}} : ();
-    foreach my $c (sort keys %c) {
-        my(%p);
-        %p = map {($_, $c{$c}{properties}{$_})} keys %{$c{$c}{properties}};
-# ???   %e = map {($_, $c{$c}{elements}{$_})}   keys %{$c{$c}{elements}};
-        $text .= sprintf("=item $c%s\n\n", ($d{$c}{desc} ? ": $d{$c}{desc}" : ''));
 
-        if (each %p) {
+    foreach my $c (sort keys %c) {
+        my(%p, %e, %n);
+        %p = map {($_, $c{$c}{properties}{$_})} keys %{$c{$c}{properties}};
+        %e = map {($_, $c{$c}{elements}{$_})}   keys %{$c{$c}{elements}};
+
+        foreach (keys %p) {
+            if (! $_ && $p{$_}[0] eq 'c@#!') {
+                delete $p{$_};
+            }
+        }
+
+        $text .= sprintf("=item %s (%s)%s\n\n", $c, $c{$c}{id},
+            ($d{$c}{desc} ? ": $d{$c}{desc}" : ''));
+
+        if (values %p) {
             $text .= "Properties:\n\n";
             $text .= join '',
-                map {"    $_ ($c{$c}{properties}{$_}[1]): $d{$c}{properties}{$_}\n"}
-                (sort keys %p);
+                map {
+                    sprintf("    %s (%s/%s): %s%s\n", $_,
+                        $c{$c}{properties}{$_}[0],
+                        $c{$c}{properties}{$_}[1],
+                        $d{$c}{properties}{$_}, 
+                        ($c{$c}{properties}{$_}[4] ? ' (read-only)' : '')
+                    )
+                } (sort keys %p);
             $text .= "\n";
         }
+
+        if (values %e) {
+            $text .= "Elements: " . join(', ', sort keys %e) . "\n\n";
+        }
+
     }
     $text .= "=back\n\n";
-    return($text);
+
+    return $text;
 }
 
 sub finish {
     my($self) = @_;
+    my %dbm;
 
-    tie my %dbm, 'MLDBM', $self->{OUTPUT}, O_CREAT|O_RDWR|O_EXCL,
-        0640 or die $!;
+    my $path = dirname($self->{OUTPUT});
+    mkpath($path);
+    die "Couldn't create path: $!" unless -d $path;
 
-    $dbm{CLASS} = $self->{C};
-    $dbm{EVENT} = $self->{E};
-    $dbm{APP}   = $self->{ID};
+    unlink $self->{OUTPUT} if $self->{DELETE};
 
-    foreach (@{$self}{qw(START MIDDLE FINISH)}) {
+    if (!tie %dbm, 'MLDBM', $self->{OUTPUT}, O_CREAT|O_RDWR|O_EXCL, 0640) {
+        warn "Can't tie to '$self->{OUTPUT}': $!";
+        return;
+    }
+
+    $dbm{ENUM}          = $self->{N};
+    $dbm{CLASS}         = $self->{C};
+    $dbm{EVENT}         = $self->{E};
+    $dbm{COMPARISON}    = $self->{P};
+    $dbm{ID}            = $self->{ID};
+
+    foreach (@{$self}{qw(START FINISH)}) {
         s/__APPNAME__/$self->{TITLE}/g;
         s/__APPID__/$self->{ID}/g;
     }
 
+    unlink "$$self{OUTPUT}.pod" if $self->{DELETE};
+
     local *FILE;
-    sysopen FILE, "$$self{OUTPUT}.pod", O_CREAT|O_WRONLY|O_EXCL or die $!;
+    sysopen FILE, "$$self{OUTPUT}.pod", O_CREAT|O_WRONLY|O_EXCL
+        or die "Can't create file '$$self{OUTPUT}.pod': $!";
     MacPerl::SetFileInfo(qw(McPL McPp), $self->{OUTPUT});
     MacPerl::SetFileInfo(qw(·uck TEXT), "$$self{OUTPUT}.pod");
 
-#     print $self->{START};
-#     print fixdump($self->{E}, 'EVENT');
-#     print fixdump($self->{C}, 'CLASS');
-
-    print FILE $self->{MIDDLE};
+    print FILE $self->{START};
     print FILE doc_events($self);
     print FILE doc_classes($self);
+    print FILE doc_enums($self);
     print FILE $self->{FINISH};
 }
 
 sub new {
     my $type = shift or die;
     my $output = shift or die;
+    my $delete = shift;
     my $self = {OUTPUT => $output, _init()};
-    return(bless($self, $type));
+    $self->{DELETE} = $delete || 0;
+    return bless($self, $type);
 }
 
 sub write_title {
@@ -156,13 +210,13 @@ sub end_suite {
 
 sub start_event {
     my($self, $name, $desc, $class, $id, $ev, $en, $c) = @_;
-    $ev = fixname($name);
+    $ev = lc fixname($name);
     $en = $ev;
     $c = 2;
     while (exists($self->{E}{$en})) {
         $en = $ev . $c++;
     }
-    @{$self->{E }{$en}}{qw(class event)} = ($class, $id);
+    @{$self->{E }{$en}}{qw(class event desc)} = ($class, $id, $desc);
       $self->{DE}{$en}{desc}             = $desc;
     $self->{CE} = $en;
 }
@@ -174,32 +228,33 @@ sub end_event {
 
 sub write_reply {
     my($self, $type, $desc, $req, $list, $enum) = @_;
-    $self->{E }{$self->{CE}}{reply} = [$type, $req, $list, $enum];
+    $self->{E }{$self->{CE}}{reply} = [$type, $req, $list, $enum];  # desc?
     $self->{DE}{$self->{CE}}{reply} = $desc;
 }
 
 sub write_dobj {
     my($self, $type, $desc, $req, $list, $enum, $change) = @_;
-    $self->{E }{$self->{CE}}{params}{'----'} = ['----', $type, $req, $list, $enum, $change];
+    $self->{E }{$self->{CE}}{params}{'----'} = ['----', $type, $req, $list, $enum, $change];  # desc?
     $self->{DE}{$self->{CE}}{params}{'----'} = $desc;
 }
 
 sub write_param {
     my($self, $name, $id, $type, $desc, $req, $list, $enum) = @_;
-    my $ev = fixname($name);
-    $self->{E }{$self->{CE}}{params}{$ev} = [$id, $type, $req, $list, $enum];
+    my $ev = lc fixname($name);
+    $self->{E }{$self->{CE}}{params}{$ev} = [$id, $type, $req, $list, $enum];  # desc?
     $self->{DE}{$self->{CE}}{params}{$ev} = $desc;
 }
 
 sub begin_class {
     my($self, $name, $id, $desc, $ev, $en, $c) = @_;
-    $ev = fixname($name);
+    $ev = lc fixname($name);
     $en = $ev;
     $c = 2;
-    while (exists($self->{E}{$en})) {
+    while (exists($self->{C}{$en})) {
         $en = $ev . $c++;
     }
     $self->{C }{$en}{id} = $id;
+    $self->{C }{$en}{desc} = $desc;
     $self->{DC}{$en}{desc} = $desc;
     $self->{CC} = $en;
 }
@@ -211,8 +266,8 @@ sub end_class {
 
 sub write_property {
     my($self, $name, $id, $class, $desc, $list, $enum, $rdonly) = @_;
-    my $ev = fixname($name);
-    $self->{C }{$self->{CC}}{properties}{$ev} = [$id, $class, $list, $enum, $rdonly];
+    my $ev = lc fixname($name);
+    $self->{C }{$self->{CC}}{properties}{$ev} = [$id, $class, $list, $enum, $rdonly];  # desc?
     $self->{DC}{$self->{CC}}{properties}{$ev} = $desc;
 }
 
@@ -222,70 +277,51 @@ sub end_properties {
 
 sub write_element {
     my($self, $name, @keys) = @_;
-    my $ev = fixname($name);
+    my $ev = lc fixname($name);
     $self->{C }{$self->{CC}}{elements}{$ev} = [@keys];
 }
 
 sub write_comparison {
+    my($self, $name, $id, $desc) = @_;
+    $self->{P }{$name} = [$id, $desc];
 #    print "# OK\n";
 }
 
 sub begin_enumeration {
-#    my ($self, $id) = @_;
-#    print "\n\@ENUMERATION \'$id\'\n";
+    my($self, $id) = @_;
+    $self->{N}{$id} = {};
+    $self->{'NE'} = $id;
 }
 
 sub end_enumeration {
-#    print "\n";
+    my $self = shift;
+    undef $self->{'NE'};
 }
 
 sub write_enum {
-#    my ($self, $name, $id, $comment) = @_;
-#    print "\@ENUM \"$name\", \'$id\', \"$comment\"\n";
+    my($self, $name, $id, $desc, $ev, $en, $c) = @_;
+    $en = $ev = lc fixname($name);
+    $c = 2;
+    while (exists $self->{N}{$en}) {
+        $en = $ev . $c++;
+    }
+
+    $self->{N }{$self->{'NE'}}{$en}{id}   = $id;
+    $self->{N }{$self->{'NE'}}{$en}{desc} = $desc;
+    $self->{DN}{$self->{'NE'}}{$en}{desc} = $desc;
 }
 
 sub _init {
     my(%self);
-    $self{START} =<<'EOT';
-package Mac::Glue::__APPNAME__;
-use strict;
-use vars qw($VERSION $APP %EVENT %CLASS @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-use Exporter;
-use Mac::Glue;
-use Mac::Glue::Dialect::English;
-use Mac::Glue::Scripting_Additions;
-@ISA = qw(Mac::Glue);
-@EXPORT = qw(obj_form);
-@EXPORT_OK = @Mac::Glue::EXPORT;
-%EXPORT_TAGS = (all=>[@EXPORT, @EXPORT_OK]);
-$VERSION = '0.01';
-sub new {
-    my($class) = 
-        Mac::Glue::merge({%CLASS},
-        \%Mac::Glue::Dialect::English::CLASS,
-        \%Mac::Glue::Scripting_Additions::CLASS)
-        ;#: \%CLASS;
-    bless {
-        'APP' => $APP, 'EVENT' => \%EVENT, 'CLASS' => $class, 'SWITCH' => 0
-    }, shift
-}
-$APP = '__APPID__';
-
-EOT
-
-    $self{MIDDLE} = <<'EOT';
-
-1;
-__END__
-
+    $self{START} = <<'EOT';
 =head1 NAME
 
-Mac::Glue::__APPNAME__ - Control __APPNAME__ app
+__APPNAME__ Glue - Control __APPNAME__ app
 
 =head1 SYNOPSIS
 
-    use Mac::Glue::__APPNAME__;
-    my $obj = new Mac::Glue::__APPNAME__;
+    use Mac::Glue;
+    my $obj = new Mac::Glue '__APPNAME__';
 
 =head1 DESCRIPTION
 
@@ -296,26 +332,23 @@ EOT
     $self{FINISH} = <<EOT;
 =head1 AUTHOR
 
-Module developed by ${\($ENV{'USER'} || '????')}.
+Glue created by ${\($ENV{'USER'} || '????')}
+using F<gluemac> by Chris Nandor and the Mac::AETE modules
+by David C. Schooley.
 
-Created using F<glue_me.dp> by Chris Nandor.
-
-Chris Nandor F<E<lt>pudge\@pobox.comE<gt>>
-http://pudge.net/
-
-Copyright (c) 1998 Chris Nandor.  All rights reserved.  This program is free 
-software; you can redistribute it and/or modify it under the same terms as 
-Perl itself.  Please see the Perl Artistic License.
+Copyright (c) ${\((localtime)[5] + 1900)}.  All rights reserved.  This program is
+free software; you can redistribute it and/or modify it under the terms
+of the Artistic License, distributed with Perl.
 
 =head1 SEE ALSO
 
 Mac::AppleEvents, Mac::AppleEvents::Simple, macperlcat, Inside Macintosh: 
-Interapplication Communication.
+Interapplication Communication, Mac::Glue, Mac::AETE.
 
 =cut
 EOT
 
-    return(%self);
+    return %self;
 }
 1;
 

@@ -92,7 +92,7 @@ aeteconvert script by Chris Nandor.
 
 =cut
 
-package Parser;
+package Mac::AETE::Parser;
 
 use Data::Dumper;
 use strict;

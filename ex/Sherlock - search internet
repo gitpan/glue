@@ -1,8 +1,15 @@
 #!perl -wl
+
 use Mac::Glue;
+
 $s = new Mac::Glue 'Sherlock';
-@results = $s->search_Internet(
-    'AltaVista', { 'for' => 'Mac::Glue', _reply=>1})->get;
-print @results ? join("\n", @results) : "No matches found.";
+$s->activate;
+
+@results = $s->search_internet('AltaVista', For => 'Mac::Glue');
+warn $^E if $^E;
+
+print @results ? join("\n", sort @results) : "No matches found.";
+
+$s->quit;
 
 __END__

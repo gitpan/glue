@@ -1,0 +1,51 @@
+#!perl -w
+# need UnderMethods module, see below
+use UnderMethods;
+use Mac::Glue;
+use strict;
+
+my($vol, $f, $volume, $label, $position, $oldpos);
+
+for ($f = new Mac::Glue 'Finder') {
+    $vol      = prop('startup disk');
+    $position = prop('position', $vol);
+    $label    = prop('label_index', $vol);
+    $oldpos   = get($position);
+
+    activate();
+    set($position, to => [10, 40]);
+
+    for my $i (0 .. 2**5) {
+        set($label, to => $i);
+    }
+
+    set($position, to => $oldpos);
+
+    beep(3);
+}
+
+__END__
+
+package UnderMethods;
+
+use strict;
+use overload;
+use Carp;
+use vars '$AUTOLOAD';
+
+sub import {
+    no strict 'refs';
+    *{ caller() . "::AUTOLOAD" } = \&AUTOLOAD;
+}
+
+sub AUTOLOAD {
+    my($ref) = (overload::StrVal($_) =~ /^(?:(.*)\=)?(?:[^=]*)\((?:[^\(]*)\)$/);
+    croak "Undefined subroutine &$AUTOLOAD called" unless $ref;
+    (my $name = $AUTOLOAD) =~ s/.*:://;
+    my $func = $_->can($name);
+    confess "Can't call method `$name' in $ref" unless $func;
+    unshift @_, $_;
+    goto &$func;
+}
+
+1;

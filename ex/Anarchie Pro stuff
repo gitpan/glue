@@ -1,0 +1,23 @@
+#!perl -wl
+use Mac::Files;
+use Mac::Glue ':glue';
+use strict;
+
+my $a = new Mac::Glue 'Anarchie Pro';
+
+$a->activate;
+$a->settransfermode(enum('tmautomatic'));
+
+my $file = FindFolder(kOnSystemDisk, kDesktopFolderType)
+    . ":Mac-Glue-docs-2.html";
+
+my $err = $a->webfetch(
+    # putting "$file" instead of "$a->obj(file => $file)"
+    # makes Mac::Glue try to resolve it as an alias instead,
+    # which is not what we want
+
+    $a->obj(file => $file),
+    url => 'http://pudge.net/macperl/Mac-Glue-docs.html'
+
+);
+die "Anarchie error: $err" if $err;

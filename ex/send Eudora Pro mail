@@ -1,0 +1,36 @@
+#!perl -w
+use Mac::Glue ':glue';
+use strict;
+
+my $e = new Mac::Glue 'Eudora Pro';
+my $box = $e->obj(mailbox => 'Out');
+$e->activate;
+
+my $mail = $e->make(
+    new => 'message',
+    at => location(end => $box)
+);
+die $^E if $^E;
+
+$e->set( $e->obj(field => 'Subject:', $mail), to => 'Alert!');
+die $^E if $^E;
+$e->set( $e->obj(field => 'To:',      $mail), to => 'pudge@pobox.com');
+die $^E if $^E;
+
+$e->set( $e->prop(body => $mail), to => <<EOT);
+Hi Beavis.  This is Butt-head.
+Are you still my friend?
+
+Yours,
+
+Butt-head.
+EOT
+die $^E if $^E;
+
+$e->queue($mail);
+die $^E if $^E;
+
+$e->connect(sending => 1, checking => 0);
+die $^E if $^E;
+
+__END__

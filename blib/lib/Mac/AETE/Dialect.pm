@@ -3,7 +3,7 @@
 # terms as Perl itself.
 
 
-package Dialect;
+package Mac::AETE::Dialect;
 
 =head1 NAME
 
@@ -77,7 +77,7 @@ use Mac::Files;
 
 use Carp;
 
-@Dialect::ISA = qw (Parser);
+@Mac::AETE::Dialect::ISA = qw (Mac::AETE::Parser);
 
 sub _filter
 {
@@ -118,7 +118,7 @@ sub new {
 	if (!defined($aete_handle) || $aete_handle == 0) {
 	    croak("Application is not scriptable");
 	}
-        $self = Parser->new($aete_handle, $dialect_file);
+        $self = Mac::AETE::Parser->new($aete_handle, $dialect_file);
 	$self->{_resource_fork} = $RF;
     } else {
 	croak("Couldn't find a dialect file");

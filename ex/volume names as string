@@ -1,0 +1,12 @@
+#!perl -wl
+use Mac::Glue ':glue';
+use strict;
+
+my $g = new Mac::Glue 'Finder';
+my $sd = $g->prop('Startup Disk');
+my $all = $g->obj(disks => glueAll);
+
+print "Startup disk:\n  ", $g->get($sd, as => 'string');
+
+print "\nAll disks:\n",
+    map {"  $_\n"} sort $g->get($all, as => 'string');
